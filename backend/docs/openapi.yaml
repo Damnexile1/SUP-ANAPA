@@ -1,0 +1,95 @@
+openapi: 3.0.3
+info:
+  title: SUP Anapa Booking API
+  version: 1.0.0
+servers:
+  - url: http://localhost:8080
+paths:
+  /api/instructors:
+    get:
+      summary: Список инструкторов
+      parameters:
+        - in: query
+          name: min_price
+          schema: { type: integer }
+        - in: query
+          name: max_price
+          schema: { type: integer }
+        - in: query
+          name: min_rating
+          schema: { type: number }
+        - in: query
+          name: tag
+          schema: { type: string }
+      responses:
+        '200': { description: OK }
+  /api/instructors/{id}:
+    get:
+      summary: Профиль инструктора
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200': { description: OK }
+  /api/routes:
+    get:
+      summary: Список маршрутов
+      responses:
+        '200': { description: OK }
+  /api/availability:
+    get:
+      summary: Доступные слоты
+      parameters:
+        - in: query
+          name: date
+          required: true
+          schema: { type: string, format: date }
+        - in: query
+          name: route_id
+          schema: { type: string, format: uuid }
+        - in: query
+          name: instructor_id
+          schema: { type: string, format: uuid }
+      responses:
+        '200': { description: OK }
+  /api/weather:
+    get:
+      summary: Погода и оценка условий
+      parameters:
+        - in: query
+          name: lat
+          required: true
+          schema: { type: number }
+        - in: query
+          name: lng
+          required: true
+          schema: { type: number }
+        - in: query
+          name: datetime
+          required: true
+          schema: { type: string, format: date-time }
+      responses:
+        '200': { description: OK }
+  /api/bookings:
+    post:
+      summary: Создать бронь
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '201': { description: Created }
+  /api/bookings/{id}:
+    get:
+      summary: Получить бронь
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200': { description: OK }
