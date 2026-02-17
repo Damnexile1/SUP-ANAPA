@@ -1,11 +1,12 @@
 package http
 
 import (
-	"encoding/json"
 	"net/http"
 	"strconv"
-	"strings"
 	"time"
+
+	"github.com/gin-gonic/gin"
+	"gorm.io/datatypes"
 
 	"sup-anapa/backend/internal/models"
 	"sup-anapa/backend/internal/repository"
@@ -21,220 +22,176 @@ func NewHandler(repo *repository.Repository, weather *service.WeatherService) *H
 	return &Handler{repo: repo, weather: weather}
 }
 
-func (h *Handler) Register(mux *http.ServeMux) {
-	mux.HandleFunc("/health", func(w http.ResponseWriter, _ *http.Request) { writeJSON(w, 200, map[string]any{"status": "ok"}) })
-	mux.HandleFunc("/api/instructors", h.listInstructors)
-	mux.HandleFunc("/api/instructors/", h.getInstructor)
-	mux.HandleFunc("/api/routes", h.listRoutes)
-	mux.HandleFunc("/api/availability", h.listAvailability)
-	mux.HandleFunc("/api/weather", h.getWeather)
-	mux.HandleFunc("/api/bookings", h.createBooking)
-	mux.HandleFunc("/api/bookings/", h.getBooking)
-	mux.HandleFunc("/api/admin/instructors", h.upsertInstructor)
-	mux.HandleFunc("/api/admin/routes", h.upsertRoute)
-	mux.HandleFunc("/api/admin/availability/bulk", h.bulkSlots)
-	mux.HandleFunc("/api/admin/bookings/", h.patchBookingStatus)
+func (h *Handler) Register(r *gin.Engine) {
+	r.GET("/health", func(c *gin.Context) { c.JSON(http.StatusOK, gin.H{"status": "ok"}) })
+	api := r.Group("/api")
+	{
+		api.GET("/instructors", h.listInstructors)
+		api.GET("/instructors/:id", h.getInstructor)
+		api.GET("/routes", h.listRoutes)
+		api.GET("/availability", h.listAvailability)
+		api.GET("/weather", h.getWeather)
+		api.POST("/bookings", h.createBooking)
+		api.GET("/bookings/:id", h.getBooking)
+
+		admin := api.Group("/admin")
+		admin.POST("/instructors", h.upsertInstructor)
+		admin.PUT("/instructors/:id", h.upsertInstructor)
+		admin.POST("/routes", h.upsertRoute)
+		admin.PUT("/routes/:id", h.upsertRoute)
+		admin.POST("/availability/bulk", h.bulkSlots)
+		admin.PATCH("/bookings/:id/status", h.patchBookingStatus)
+	}
 }
 
-func (h *Handler) listInstructors(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		writeJSON(w, 405, nil)
-		return
-	}
-	minPrice, _ := strconv.Atoi(r.URL.Query().Get("min_price"))
-	maxPrice, _ := strconv.Atoi(r.URL.Query().Get("max_price"))
-	minRating, _ := strconv.ParseFloat(r.URL.Query().Get("min_rating"), 64)
-	items, err := h.repo.ListInstructors(minPrice, maxPrice, minRating, r.URL.Query().Get("tag"))
+func (h *Handler) listInstructors(c *gin.Context) {
+	minPrice, _ := strconv.Atoi(c.Query("min_price"))
+	maxPrice, _ := strconv.Atoi(c.Query("max_price"))
+	minRating, _ := strconv.ParseFloat(c.Query("min_rating"), 64)
+	items, err := h.repo.ListInstructors(minPrice, maxPrice, minRating, c.Query("tag"))
 	if err != nil {
-		writeErr(w, 500, err)
+		c.JSON(500, gin.H{"error": err.Error()})
 		return
 	}
-	writeJSON(w, 200, items)
+	c.JSON(200, items)
 }
-func (h *Handler) getInstructor(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		writeJSON(w, 405, nil)
-		return
-	}
-	id := strings.TrimPrefix(r.URL.Path, "/api/instructors/")
-	item, err := h.repo.GetInstructor(id)
+func (h *Handler) getInstructor(c *gin.Context) {
+	item, err := h.repo.GetInstructor(c.Param("id"))
 	if err != nil {
-		writeErrMsg(w, 404, "not found")
+		c.JSON(404, gin.H{"error": "not found"})
 		return
 	}
-	writeJSON(w, 200, item)
+	c.JSON(200, item)
 }
-func (h *Handler) listRoutes(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		writeJSON(w, 405, nil)
-		return
-	}
+func (h *Handler) listRoutes(c *gin.Context) {
 	items, err := h.repo.ListRoutes()
 	if err != nil {
-		writeErr(w, 500, err)
+		c.JSON(500, gin.H{"error": err.Error()})
 		return
 	}
-	writeJSON(w, 200, items)
+	c.JSON(200, items)
 }
-func (h *Handler) listAvailability(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		writeJSON(w, 405, nil)
-		return
-	}
-	date, err := time.Parse("2006-01-02", r.URL.Query().Get("date"))
+
+func (h *Handler) listAvailability(c *gin.Context) {
+	date, err := time.Parse("2006-01-02", c.Query("date"))
 	if err != nil {
-		writeErrMsg(w, 400, "invalid date")
+		c.JSON(400, gin.H{"error": "invalid date"})
 		return
 	}
-	slots, err := h.repo.ListAvailability(date, r.URL.Query().Get("route_id"), r.URL.Query().Get("instructor_id"))
+	slots, err := h.repo.ListAvailability(date, c.Query("route_id"), c.Query("instructor_id"))
 	if err != nil {
-		writeErr(w, 500, err)
+		c.JSON(500, gin.H{"error": err.Error()})
 		return
 	}
-	writeJSON(w, 200, slots)
+	c.JSON(200, slots)
 }
-func (h *Handler) getWeather(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		writeJSON(w, 405, nil)
-		return
-	}
-	lat, err := strconv.ParseFloat(r.URL.Query().Get("lat"), 64)
+
+func (h *Handler) getWeather(c *gin.Context) {
+	lat, err := strconv.ParseFloat(c.Query("lat"), 64)
 	if err != nil {
-		writeErrMsg(w, 400, "invalid lat")
+		c.JSON(400, gin.H{"error": "invalid lat"})
 		return
 	}
-	lng, err := strconv.ParseFloat(r.URL.Query().Get("lng"), 64)
+	lng, err := strconv.ParseFloat(c.Query("lng"), 64)
 	if err != nil {
-		writeErrMsg(w, 400, "invalid lng")
+		c.JSON(400, gin.H{"error": "invalid lng"})
 		return
 	}
-	dt, err := time.Parse(time.RFC3339, r.URL.Query().Get("datetime"))
+	datetime, err := time.Parse(time.RFC3339, c.Query("datetime"))
 	if err != nil {
-		writeErrMsg(w, 400, "invalid datetime")
+		c.JSON(400, gin.H{"error": "invalid datetime"})
 		return
 	}
-	resp, err := h.weather.Get(lat, lng, dt, r.URL.Query().Get("route_id"), r.URL.Query().Get("instructor_id"))
+	resp, err := h.weather.Get(lat, lng, datetime, c.Query("route_id"), c.Query("instructor_id"))
 	if err != nil {
-		writeErr(w, 500, err)
+		c.JSON(500, gin.H{"error": err.Error()})
 		return
 	}
-	writeJSON(w, 200, resp)
+	c.JSON(200, resp)
 }
-func (h *Handler) createBooking(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		writeJSON(w, 405, nil)
-		return
-	}
+
+func (h *Handler) createBooking(c *gin.Context) {
 	var req models.Booking
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeErr(w, 400, err)
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(400, gin.H{"error": err.Error()})
 		return
 	}
-	if req.CustomerName == "" || req.Phone == "" || req.Participants < 1 || req.SlotID == "" {
-		writeErrMsg(w, 400, "missing required fields")
+	if req.CustomerName == "" || req.Phone == "" || req.Participants < 1 {
+		c.JSON(400, gin.H{"error": "missing required fields"})
 		return
 	}
-	if req.Options == nil {
-		req.Options = map[string]any{}
+	req.Status = "pending"
+	if len(req.Options) == 0 {
+		req.Options = datatypes.JSON([]byte(`{}`))
 	}
 	if err := h.repo.CreateBooking(&req); err != nil {
-		writeErrMsg(w, 400, "cannot book selected slot")
+		c.JSON(400, gin.H{"error": "cannot book selected slot"})
 		return
 	}
-	writeJSON(w, 201, req)
+	c.JSON(201, req)
 }
-func (h *Handler) getBooking(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		writeJSON(w, 405, nil)
-		return
-	}
-	id := strings.TrimPrefix(r.URL.Path, "/api/bookings/")
-	b, err := h.repo.GetBooking(id)
+
+func (h *Handler) getBooking(c *gin.Context) {
+	b, err := h.repo.GetBooking(c.Param("id"))
 	if err != nil {
-		writeErrMsg(w, 404, "not found")
+		c.JSON(404, gin.H{"error": "not found"})
 		return
 	}
-	writeJSON(w, 200, b)
+	c.JSON(200, b)
 }
-func (h *Handler) upsertInstructor(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost && r.Method != http.MethodPut {
-		writeJSON(w, 405, nil)
+func (h *Handler) upsertInstructor(c *gin.Context) {
+	var m models.Instructor
+	if err := c.ShouldBindJSON(&m); err != nil {
+		c.JSON(400, gin.H{"error": err.Error()})
 		return
 	}
-	var m models.Instructor
-	if err := json.NewDecoder(r.Body).Decode(&m); err != nil {
-		writeErr(w, 400, err)
-		return
+	if c.Param("id") != "" {
+		m.ID = parseUUID(c.Param("id"))
 	}
 	if err := h.repo.UpsertInstructor(&m); err != nil {
-		writeErr(w, 500, err)
+		c.JSON(500, gin.H{"error": err.Error()})
 		return
 	}
-	writeJSON(w, 200, m)
+	c.JSON(200, m)
 }
-func (h *Handler) upsertRoute(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost && r.Method != http.MethodPut {
-		writeJSON(w, 405, nil)
+func (h *Handler) upsertRoute(c *gin.Context) {
+	var m models.Route
+	if err := c.ShouldBindJSON(&m); err != nil {
+		c.JSON(400, gin.H{"error": err.Error()})
 		return
 	}
-	var m models.Route
-	if err := json.NewDecoder(r.Body).Decode(&m); err != nil {
-		writeErr(w, 400, err)
-		return
+	if c.Param("id") != "" {
+		m.ID = parseUUID(c.Param("id"))
 	}
 	if err := h.repo.UpsertRoute(&m); err != nil {
-		writeErr(w, 500, err)
+		c.JSON(500, gin.H{"error": err.Error()})
 		return
 	}
-	writeJSON(w, 200, m)
+	c.JSON(200, m)
 }
-func (h *Handler) bulkSlots(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		writeJSON(w, 405, nil)
+func (h *Handler) bulkSlots(c *gin.Context) {
+	var slots []models.TimeSlot
+	if err := c.ShouldBindJSON(&slots); err != nil {
+		c.JSON(400, gin.H{"error": err.Error()})
 		return
 	}
-	var s []models.TimeSlot
-	if err := json.NewDecoder(r.Body).Decode(&s); err != nil {
-		writeErr(w, 400, err)
+	if err := h.repo.BulkCreateSlots(slots); err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
 		return
 	}
-	if err := h.repo.BulkCreateSlots(s); err != nil {
-		writeErr(w, 500, err)
-		return
-	}
-	writeJSON(w, 201, map[string]any{"created": len(s)})
+	c.JSON(201, gin.H{"created": len(slots)})
 }
-func (h *Handler) patchBookingStatus(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPatch {
-		writeJSON(w, 405, nil)
-		return
-	}
-	id := strings.TrimPrefix(r.URL.Path, "/api/admin/bookings/")
-	id = strings.TrimSuffix(id, "/status")
+func (h *Handler) patchBookingStatus(c *gin.Context) {
 	var req struct {
 		Status string `json:"status"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Status == "" {
-		writeErrMsg(w, 400, "status required")
+	if err := c.ShouldBindJSON(&req); err != nil || req.Status == "" {
+		c.JSON(400, gin.H{"error": "status required"})
 		return
 	}
-	if err := h.repo.PatchBookingStatus(id, req.Status); err != nil {
-		writeErr(w, 500, err)
+	if err := h.repo.PatchBookingStatus(c.Param("id"), req.Status); err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
 		return
 	}
-	writeJSON(w, 200, map[string]any{"ok": true})
-}
-
-func writeErr(w http.ResponseWriter, code int, err error) {
-	writeJSON(w, code, map[string]any{"error": err.Error()})
-}
-func writeErrMsg(w http.ResponseWriter, code int, msg string) {
-	writeJSON(w, code, map[string]any{"error": msg})
-}
-func writeJSON(w http.ResponseWriter, code int, v any) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(code)
-	if v != nil {
-		_ = json.NewEncoder(w).Encode(v)
-	}
+	c.JSON(200, gin.H{"ok": true})
 }
