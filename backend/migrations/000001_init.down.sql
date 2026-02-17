@@ -1,0 +1,5 @@
+DROP TABLE IF EXISTS weather_snapshots;
+DROP TABLE IF EXISTS bookings;
+DROP TABLE IF EXISTS time_slots;
+DROP TABLE IF EXISTS routes;
+DROP TABLE IF EXISTS instructors;
