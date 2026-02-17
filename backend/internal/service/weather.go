@@ -9,10 +9,6 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/google/uuid"
-	"gorm.io/datatypes"
-	"gorm.io/gorm"
-
 	"sup-anapa/backend/internal/models"
 	"sup-anapa/backend/internal/repository"
 )
@@ -42,42 +38,20 @@ func NewWeatherService(repo *repository.Repository, apiURL string, cacheTTL time
 
 func (s *WeatherService) Get(lat, lng float64, target time.Time, routeID, instructorID string) (WeatherResponse, error) {
 	targetHour := target.UTC().Truncate(time.Hour)
-	cached, err := s.repo.FindWeatherSnapshot(lat, lng, targetHour, s.cacheTTL)
-	if err == nil {
+	if cached, err := s.repo.FindWeatherSnapshot(lat, lng, targetHour, s.cacheTTL); err == nil {
 		resp := mapSnapshot(cached)
 		if resp.ConditionsLevel == "Плохие" {
 			resp.SuggestedSlots, _ = s.repo.SuggestedSlots(target, routeID, instructorID, 5)
 		}
 		return resp, nil
 	}
-	if err != nil && err != gorm.ErrRecordNotFound {
-		return WeatherResponse{}, err
-	}
-
 	apiData, err := s.fetch(lat, lng, targetHour)
 	if err != nil {
 		return WeatherResponse{}, err
 	}
-
 	score, level, explanation := scoreWeather(apiData.Temperature, apiData.WindSpeed, apiData.Precipitation, apiData.CloudCover)
-	raw, _ := json.Marshal(apiData.Raw)
-	snapshot := models.WeatherSnapshot{
-		ID:              uuid.New(),
-		LocationLat:     lat,
-		LocationLng:     lng,
-		TimeFrom:        targetHour,
-		TimeTo:          targetHour.Add(time.Hour),
-		Temperature:     apiData.Temperature,
-		WindSpeed:       apiData.WindSpeed,
-		Precipitation:   apiData.Precipitation,
-		CloudCover:      apiData.CloudCover,
-		ConditionsLevel: level,
-		Score:           score,
-		Raw:             datatypes.JSON(raw),
-		FetchedAt:       time.Now().UTC(),
-	}
+	snapshot := models.WeatherSnapshot{LocationLat: lat, LocationLng: lng, TimeFrom: targetHour, TimeTo: targetHour.Add(time.Hour), Temperature: apiData.Temperature, WindSpeed: apiData.WindSpeed, Precipitation: apiData.Precipitation, CloudCover: apiData.CloudCover, ConditionsLevel: level, Score: score, Raw: apiData.Raw, FetchedAt: time.Now().UTC()}
 	_ = s.repo.SaveWeatherSnapshot(&snapshot)
-
 	resp := WeatherResponse{Temperature: apiData.Temperature, WindSpeed: apiData.WindSpeed, Precipitation: apiData.Precipitation, CloudCover: apiData.CloudCover, ConditionsLevel: level, Explanation: explanation, Score: score, Raw: apiData.Raw}
 	if level == "Плохие" {
 		resp.SuggestedSlots, _ = s.repo.SuggestedSlots(target, routeID, instructorID, 5)
@@ -86,11 +60,9 @@ func (s *WeatherService) Get(lat, lng float64, target time.Time, routeID, instru
 }
 
 type fetchedData struct {
-	Temperature   float64
-	WindSpeed     float64
-	Precipitation float64
-	CloudCover    int
-	Raw           map[string]any
+	Temperature, WindSpeed, Precipitation float64
+	CloudCover                            int
+	Raw                                   map[string]any
 }
 
 func (s *WeatherService) fetch(lat, lng float64, targetHour time.Time) (fetchedData, error) {
@@ -103,7 +75,6 @@ func (s *WeatherService) fetch(lat, lng float64, targetHour time.Time) (fetchedD
 	q.Set("start_date", targetHour.Format("2006-01-02"))
 	q.Set("end_date", targetHour.Format("2006-01-02"))
 	u.RawQuery = q.Encode()
-
 	resp, err := s.http.Get(u.String())
 	if err != nil {
 		return fetchedData{}, err
@@ -113,14 +84,13 @@ func (s *WeatherService) fetch(lat, lng float64, targetHour time.Time) (fetchedD
 	if resp.StatusCode >= 400 {
 		return fetchedData{}, fmt.Errorf("weather api error: %s", string(body))
 	}
-
 	var payload struct {
 		Hourly struct {
-			Time          []string  `json:"time"`
-			Temperature2m []float64 `json:"temperature_2m"`
-			WindSpeed10m  []float64 `json:"wind_speed_10m"`
-			Precipitation []float64 `json:"precipitation"`
-			CloudCover    []int     `json:"cloud_cover"`
+			Time        []string  `json:"time"`
+			Temperature []float64 `json:"temperature_2m"`
+			Wind        []float64 `json:"wind_speed_10m"`
+			Precip      []float64 `json:"precipitation"`
+			Cloud       []int     `json:"cloud_cover"`
 		} `json:"hourly"`
 	}
 	if err := json.Unmarshal(body, &payload); err != nil {
@@ -130,18 +100,18 @@ func (s *WeatherService) fetch(lat, lng float64, targetHour time.Time) (fetchedD
 		return fetchedData{}, fmt.Errorf("empty weather payload")
 	}
 	idx := 0
-	minDiff := math.MaxFloat64
+	min := math.MaxFloat64
 	for i, t := range payload.Hourly.Time {
 		parsed, _ := time.Parse("2006-01-02T15:04", t)
-		diff := math.Abs(parsed.Sub(targetHour).Hours())
-		if diff < minDiff {
-			minDiff = diff
+		d := math.Abs(parsed.Sub(targetHour).Hours())
+		if d < min {
+			min = d
 			idx = i
 		}
 	}
 	raw := map[string]any{}
 	_ = json.Unmarshal(body, &raw)
-	return fetchedData{Temperature: payload.Hourly.Temperature2m[idx], WindSpeed: payload.Hourly.WindSpeed10m[idx], Precipitation: payload.Hourly.Precipitation[idx], CloudCover: payload.Hourly.CloudCover[idx], Raw: raw}, nil
+	return fetchedData{Temperature: payload.Hourly.Temperature[idx], WindSpeed: payload.Hourly.Wind[idx], Precipitation: payload.Hourly.Precip[idx], CloudCover: payload.Hourly.Cloud[idx], Raw: raw}, nil
 }
 
 func mapSnapshot(s models.WeatherSnapshot) WeatherResponse {
@@ -179,12 +149,11 @@ func scoreWeather(temp, wind, precipitation float64, cloud int) (int, string, st
 		score = 0
 	}
 	level := "Плохие"
-	switch {
-	case score >= 80:
+	if score >= 80 {
 		level = "Отличные"
-	case score >= 60:
+	} else if score >= 60 {
 		level = "Хорошие"
-	case score >= 40:
+	} else if score >= 40 {
 		level = "Нормальные"
 	}
 	return score, level, explanationFor(wind, precipitation, temp)
