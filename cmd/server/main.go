@@ -9,6 +9,7 @@ import (
 	"sup-anapa/internal/middleware"
 	"sup-anapa/internal/repository"
 	"sup-anapa/internal/services"
+	bookinguc "sup-anapa/internal/usecase/booking"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -57,6 +58,7 @@ func main() {
 	handlers.SetUserAuthService(userAuthService)
 	handlers.SetRepositories(bookingRepo, instructorRepo, slotRepo)
 	handlers.SetUserRepository(userRepo)
+	handlers.SetBookingUseCase(bookinguc.NewCreateBookingUseCase(slotRepo, bookingRepo, userRepo, 20))
 
 	// Инициализация middleware
 	middleware.InitAuth(handlers.GetStore())
