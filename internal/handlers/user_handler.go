@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"strings"
 	"sup-anapa/internal/middleware"
-	bookinguc "sup-anapa/internal/usecase/booking"
+	"sup-anapa/internal/models"
 	"time"
 )
 
@@ -109,13 +109,6 @@ func UserCabinet(w http.ResponseWriter, r *http.Request) {
 }
 
 func CreateBooking(w http.ResponseWriter, r *http.Request) {
-	userSession, _ := store.Get(r, "user-session")
-	userID, ok := userSession.Values["user_id"].(int)
-	if !ok || userID < 1 {
-		http.Error(w, "Для бронирования нужно войти в аккаунт", http.StatusUnauthorized)
-		return
-	}
-
 	var bookingData struct {
 		SlotID      int    `json:"slot_id"`
 		ClientName  string `json:"client_name"`
@@ -133,31 +126,78 @@ func CreateBooking(w http.ResponseWriter, r *http.Request) {
 	correlationID := middleware.GetCorrelationID(r.Context())
 	log.Printf("CreateBooking: correlation_id=%s incoming request slot_id=%d people=%d client=%q", correlationID, bookingData.SlotID, bookingData.PeopleCount, bookingData.ClientName)
 
-	booking, holdExpires, err := createBooking.Execute(r.Context(), bookinguc.CreateBookingInput{
-		UserID:      userID,
-		SlotID:      bookingData.SlotID,
-		PeopleCount: bookingData.PeopleCount,
-		ClientEmail: bookingData.ClientEmail,
-	})
-	if err != nil {
-		switch err.Error() {
-		case "slot_required":
-			http.Error(w, "Выберите слот для бронирования", http.StatusBadRequest)
-		case "invalid_people_count":
-			http.Error(w, "Количество человек должно быть больше 0", http.StatusBadRequest)
-		case "user_not_found":
-			http.Error(w, "Не удалось получить данные пользователя", http.StatusUnauthorized)
-		case "slot_not_found":
-			log.Printf("CreateBooking: correlation_id=%s slot not found slot_id=%d", correlationID, bookingData.SlotID)
-			http.Error(w, "Слот не найден", http.StatusNotFound)
-		case "slot_unavailable":
-			http.Error(w, "Слот уже занят или недоступен", http.StatusConflict)
-		case "too_many_people":
-			http.Error(w, "Слишком много человек для выбранной прогулки", http.StatusBadRequest)
-		default:
-			log.Printf("CreateBooking: correlation_id=%s usecase error: %v", correlationID, err)
-			http.Error(w, "Internal server error", http.StatusInternalServerError)
+	if bookingData.SlotID < 1 {
+		http.Error(w, "Выберите слот для бронирования", http.StatusBadRequest)
+		return
+	}
+
+	if bookingData.PeopleCount < 1 {
+		http.Error(w, "Количество человек должно быть больше 0", http.StatusBadRequest)
+		return
+	}
+
+	userID := 0
+	clientName := strings.TrimSpace(bookingData.ClientName)
+	clientPhone := strings.TrimSpace(bookingData.ClientPhone)
+
+	userSession, _ := store.Get(r, "user-session")
+	if sessionUserID, ok := userSession.Values["user_id"].(int); ok && sessionUserID > 0 {
+		user, err := userRepo.GetByID(r.Context(), sessionUserID)
+		if err == nil {
+			userID = sessionUserID
+			clientName = user.Username
+			clientPhone = user.Phone
 		}
+	}
+
+	if clientName == "" {
+		http.Error(w, "Введите имя", http.StatusBadRequest)
+		return
+	}
+
+	if clientPhone == "" {
+		http.Error(w, "Введите телефон", http.StatusBadRequest)
+		return
+	}
+
+	slot, err := slotRepo.GetByIDWithLock(r.Context(), bookingData.SlotID)
+	if err != nil {
+		log.Printf("CreateBooking: correlation_id=%s slot not found slot_id=%d err=%v", correlationID, bookingData.SlotID, err)
+		http.Error(w, "Слот не найден", http.StatusNotFound)
+		return
+	}
+
+	if slot.Status != "available" {
+		http.Error(w, "Слот уже занят или недоступен", http.StatusConflict)
+		return
+	}
+
+	if bookingData.PeopleCount > slot.MaxPeople {
+		http.Error(w, "Слишком много человек для выбранной прогулки", http.StatusBadRequest)
+		return
+	}
+
+	holdExpires := time.Now().Add(20 * time.Minute)
+	if err := slotRepo.SetPending(r.Context(), bookingData.SlotID, holdExpires); err != nil {
+		log.Printf("CreateBooking: correlation_id=%s error setting slot pending: %v", correlationID, err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	booking := &models.Booking{
+		SlotID:      bookingData.SlotID,
+		UserID:      userID,
+		ClientName:  clientName,
+		ClientPhone: clientPhone,
+		ClientEmail: bookingData.ClientEmail,
+		PeopleCount: bookingData.PeopleCount,
+		Status:      "pending",
+	}
+
+	if err := bookingRepo.Create(r.Context(), booking); err != nil {
+		slotRepo.SetAvailable(r.Context(), bookingData.SlotID)
+		log.Printf("CreateBooking: correlation_id=%s error creating booking: %v", correlationID, err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
 
