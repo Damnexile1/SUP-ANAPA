@@ -16,6 +16,14 @@
                 <a href="/" class="hover:underline">Главная</a>
                 <a href="/instructors" class="hover:underline">Инструкторы</a>
                 <a href="/booking" class="hover:underline">Бронирование</a>
+                {{if .UserUsername}}
+                <a href="/lk" class="hover:underline font-semibold">Личный кабинет</a>
+                <span class="text-blue-200">{{.UserUsername}}</span>
+                <a href="/user/logout" class="hover:underline">Выход</a>
+                {{else}}
+                <a href="/user/login" class="hover:underline">Вход</a>
+                <a href="/user/register" class="hover:underline">Регистрация</a>
+                {{end}}
                 {{if .Username}}
                 <a href="/admin" class="hover:underline font-semibold">Админка</a>
                 <span class="text-blue-200">{{.Username}}</span>

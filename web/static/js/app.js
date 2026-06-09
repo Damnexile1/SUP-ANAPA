@@ -40,6 +40,18 @@ function loadInstructors() {
 
                 var body = document.createElement('div');
                 body.className = 'p-6';
+                body.innerHTML = '<h3 class="text-2xl font-bold text-gray-800 mb-2">' + instructor.Name + '</h3>' +
+                    '<p class="text-gray-600 mb-3">' + (instructor.Phone || '') + '</p>' +
+                    '<p class="text-gray-700 mb-3">' + (instructor.Description || 'Опытный инструктор SUP') + '</p>';
+
+                if (instructor.WalkTypes && instructor.WalkTypes.length > 0) {
+                    var wtHtml = '<div class="text-sm text-gray-600"><p class="font-semibold mb-1">Прогулки:</p>';
+                    instructor.WalkTypes.forEach(function(wt) {
+                        wtHtml += '<p>• ' + wt.Name + ' — ' + wt.Price + ' ₽, до ' + wt.MaxPeople + ' чел.</p>';
+                    });
+                    wtHtml += '</div>';
+                    body.innerHTML += wtHtml;
+                }
 
                 body.innerHTML =
                     '<h3 class="text-2xl font-bold text-gray-900 mb-2">' + (instructor.Name || 'Инструктор') + '</h3>' +
@@ -61,8 +73,28 @@ function loadInstructors() {
                     body.innerHTML += wtHtml;
                 }
 
-                div.appendChild(body);
-                grid.appendChild(div);
+    var form = document.getElementById('booking-form');
+    if (!form) return;
+    form.addEventListener('submit', submitBookingForm);
+}
+
+function loadBookingInstructors() {
+    fetch('/api/instructors')
+        .then(function(res) { return res.json(); })
+        .then(function(instructors) {
+            var container = document.getElementById('booking-instructors');
+            if (instructors.length === 0) {
+                container.innerHTML = '<p class="text-gray-500">Инструкторы пока недоступны</p>';
+                return;
+            }
+            container.innerHTML = '';
+            instructors.forEach(function(inst) {
+                var card = document.createElement('button');
+                card.type = 'button';
+                card.className = 'text-left border rounded-lg p-4 hover:border-blue-500';
+                card.innerHTML = '<p class="font-semibold">' + inst.Name + '</p><p class="text-sm text-gray-600">' + (inst.Description || '') + '</p>';
+                card.onclick = function() { selectInstructor(inst); };
+                container.appendChild(card);
             });
         })
         .catch(function(err) {
