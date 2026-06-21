@@ -4,16 +4,17 @@ services:
   postgres:
     image: postgres:15-alpine
     container_name: sup-anapa-db
+    restart: unless-stopped
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: sup_anapa
-    networks:
-      - sup-anapa-network
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    networks:
+      - sup-anapa-network
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test: ["CMD-SHELL", "pg_isready -U postgres -d sup_anapa"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -21,6 +22,7 @@ services:
   app:
     build: .
     container_name: sup-anapa-app
+    restart: unless-stopped
     ports:
       - "8080:8080"
     environment:
@@ -35,10 +37,7 @@ services:
     networks:
       - sup-anapa-network
     volumes:
-      - ./web:/app/web
-      - ./migrations:/app/migrations
       - ./logs:/app/logs
-    restart: unless-stopped
 
   admin-cli:
     image: golang:1.25-alpine
@@ -47,7 +46,7 @@ services:
     volumes:
       - .:/app
     environment:
-      DATABASE_URL: ${DATABASE_URL}
+      DATABASE_URL: postgres://postgres:postgres@postgres:5432/sup_anapa?sslmode=disable
     depends_on:
       postgres:
         condition: service_healthy
