@@ -3,18 +3,38 @@ document.addEventListener('DOMContentLoaded', function() {
     setupBookingFlow();
 });
 
+var bookingState = {
+    instructor: null,
+    walkType: null,
+    slot: null
+};
+
+function escapeHtml(value) {
+    return String(value || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+
+function formatPrice(value) {
+    var number = Number(value || 0);
+    return number.toLocaleString('ru-RU') + ' ₽';
+}
+
 function loadInstructors() {
+    var grid = document.getElementById('instructors-grid');
+    if (!grid) return;
+
     fetch('/api/instructors')
         .then(function(res) { return res.json(); })
         .then(function(instructors) {
-            var grid = document.getElementById('instructors-grid');
-            if (!grid) return;
-
-            grid.innerHTML = '';
             instructors = Array.isArray(instructors) ? instructors : [];
+            grid.innerHTML = '';
 
             if (instructors.length === 0) {
-                grid.innerHTML = '<p class="text-gray-500 text-center col-span-full">Инструкторы скоро появятся</p>';
+                grid.innerHTML = '<p class="text-[#776958] text-center col-span-full">Инструкторы скоро появятся</p>';
                 return;
             }
 
@@ -29,7 +49,7 @@ function loadInstructors() {
                 var photoURL = instructor.Photo || placeholder;
 
                 var div = document.createElement('div');
-                div.className = 'bg-white rounded-2xl shadow-lg overflow-hidden hover:shadow-2xl transition duration-300';
+                div.className = 'beige-card rounded-2xl overflow-hidden hover:shadow-2xl transition duration-300';
 
                 var img = document.createElement('img');
                 img.src = photoURL;
@@ -40,161 +60,184 @@ function loadInstructors() {
 
                 var body = document.createElement('div');
                 body.className = 'p-6';
-                body.innerHTML = '<h3 class="text-2xl font-bold text-gray-800 mb-2">' + instructor.Name + '</h3>' +
-                    '<p class="text-gray-600 mb-3">' + (instructor.Phone || '') + '</p>' +
-                    '<p class="text-gray-700 mb-3">' + (instructor.Description || 'Опытный инструктор SUP') + '</p>';
-
-                if (instructor.WalkTypes && instructor.WalkTypes.length > 0) {
-                    var wtHtml = '<div class="text-sm text-gray-600"><p class="font-semibold mb-1">Прогулки:</p>';
-                    instructor.WalkTypes.forEach(function(wt) {
-                        wtHtml += '<p>• ' + wt.Name + ' — ' + wt.Price + ' ₽, до ' + wt.MaxPeople + ' чел.</p>';
-                    });
-                    wtHtml += '</div>';
-                    body.innerHTML += wtHtml;
-                }
 
                 body.innerHTML =
-                    '<h3 class="text-2xl font-bold text-gray-900 mb-2">' + (instructor.Name || 'Инструктор') + '</h3>' +
-                    '<p class="text-gray-700 mb-3">' + (instructor.Description || 'Опытный инструктор SUP') + '</p>';
+                    '<h3 class="text-2xl font-bold text-[#3f3326] mb-2">' + escapeHtml(instructor.Name || 'Инструктор') + '</h3>' +
+                    '<p class="text-[#776958] mb-3">' + escapeHtml(instructor.Description || 'Опытный инструктор SUP') + '</p>';
 
                 if (instructor.Phone) {
-                    body.innerHTML += '<p class="text-sm text-gray-500 mb-4">' + instructor.Phone + '</p>';
+                    body.innerHTML += '<p class="text-sm text-[#8a7a66] mb-4">' + escapeHtml(instructor.Phone) + '</p>';
                 }
 
                 if (instructor.WalkTypes && instructor.WalkTypes.length > 0) {
-                    var wtHtml = '<div class="text-sm text-gray-600 border-t border-gray-100 pt-4">' +
-                        '<p class="font-semibold text-gray-900 mb-2">Прогулки:</p>';
+                    var wtHtml = '<div class="text-sm text-[#776958] border-t border-amber-950/10 pt-4">' +
+                        '<p class="font-semibold text-[#3f3326] mb-2">Прогулки:</p>';
 
                     instructor.WalkTypes.forEach(function(wt) {
-                        wtHtml += '<p class="mb-1">• ' + wt.Name + ' — ' + wt.Price + ' ₽, до ' + wt.MaxPeople + ' чел.</p>';
+                        wtHtml += '<p class="mb-1">• ' + escapeHtml(wt.Name) + ' — ' + formatPrice(wt.Price) + ', до ' + escapeHtml(wt.MaxPeople) + ' чел.</p>';
                     });
 
                     wtHtml += '</div>';
                     body.innerHTML += wtHtml;
                 }
+
+                div.appendChild(body);
+                grid.appendChild(div);
+            });
+        })
+        .catch(function(err) {
+            console.error('Ошибка загрузки инструкторов:', err);
+            grid.innerHTML = '<p class="text-red-700 text-center col-span-full">Не удалось загрузить инструкторов</p>';
+        });
+}
+
+function setupBookingFlow() {
+    if (!document.getElementById('booking-instructors')) return;
+
+    loadBookingInstructors();
 
     var form = document.getElementById('booking-form');
     if (!form) return;
+
     form.addEventListener('submit', submitBookingForm);
 }
 
 function loadBookingInstructors() {
+    var container = document.getElementById('booking-instructors');
+    if (!container) return;
+
+    container.innerHTML = '<p class="text-[#776958]">Загружаем инструкторов...</p>';
+
     fetch('/api/instructors')
         .then(function(res) { return res.json(); })
         .then(function(instructors) {
-            var container = document.getElementById('booking-instructors');
+            instructors = Array.isArray(instructors) ? instructors : [];
+            container.innerHTML = '';
+
             if (instructors.length === 0) {
-                container.innerHTML = '<p class="text-gray-500">Инструкторы пока недоступны</p>';
+                container.innerHTML = '<p class="text-[#776958]">Инструкторы пока недоступны</p>';
                 return;
             }
-            container.innerHTML = '';
+
             instructors.forEach(function(inst) {
                 var card = document.createElement('button');
                 card.type = 'button';
-                card.className = 'text-left border rounded-lg p-4 hover:border-blue-500';
-                card.innerHTML = '<p class="font-semibold">' + inst.Name + '</p><p class="text-sm text-gray-600">' + (inst.Description || '') + '</p>';
-                card.onclick = function() { selectInstructor(inst); };
+                card.className = 'text-left beige-card rounded-2xl p-5 hover:border-[#8a5a2f] transition duration-200';
+
+                card.innerHTML =
+                    '<p class="text-lg font-bold text-[#3f3326] mb-2">' + escapeHtml(inst.Name || 'Инструктор') + '</p>' +
+                    '<p class="text-sm text-[#776958]">' + escapeHtml(inst.Description || 'Опытный инструктор SUP') + '</p>';
+
+                card.onclick = function() {
+                    selectInstructor(inst);
+                    markSelectedButton(container, card);
+                };
+
                 container.appendChild(card);
             });
         })
         .catch(function(err) {
             console.error('Ошибка загрузки инструкторов:', err);
-
-            var grid = document.getElementById('instructors-grid');
-            if (!grid) return;
-
-            grid.innerHTML = '<p class="text-red-500 text-center col-span-full">Не удалось загрузить инструкторов</p>';
+            container.innerHTML = '<p class="text-red-700">Не удалось загрузить инструкторов</p>';
         });
 }
 
-var bookingState = {
-    instructor: null,
-    walkType: null,
-    slot: null
-};
+function markSelectedButton(container, selectedCard) {
+    var buttons = container.querySelectorAll('button');
+    buttons.forEach(function(button) {
+        button.classList.remove('ring-2', 'ring-[#8a5a2f]', 'bg-[#fff3df]');
+    });
 
-function setupBookingFlow() {
-    if (!document.getElementById('booking-instructors')) return;
-    loadBookingInstructors();
-
-    var form = document.getElementById('booking-form');
-    if (!form) return;
-    form.addEventListener('submit', submitBookingForm);
-}
-
-function loadBookingInstructors() {
-    fetch('/api/instructors')
-        .then(function(res) { return res.json(); })
-        .then(function(instructors) {
-            var container = document.getElementById('booking-instructors');
-            if (instructors.length === 0) {
-                container.innerHTML = '<p class="text-gray-500">Инструкторы пока недоступны</p>';
-                return;
-            }
-            container.innerHTML = '';
-            instructors.forEach(function(inst) {
-                var card = document.createElement('button');
-                card.type = 'button';
-                card.className = 'text-left border rounded-lg p-4 hover:border-blue-500';
-                card.innerHTML = '<p class="font-semibold">' + inst.Name + '</p><p class="text-sm text-gray-600">' + (inst.Description || '') + '</p>';
-                card.onclick = function() { selectInstructor(inst); };
-                container.appendChild(card);
-            });
-        });
+    selectedCard.classList.add('ring-2', 'ring-[#8a5a2f]', 'bg-[#fff3df]');
 }
 
 function selectInstructor(inst) {
     bookingState.instructor = inst;
     bookingState.walkType = null;
     bookingState.slot = null;
-    document.getElementById('walk-type-step').classList.remove('hidden');
-    document.getElementById('slot-step').classList.add('hidden');
-    document.getElementById('booking-form-container').classList.add('hidden');
+
+    var walkTypeStep = document.getElementById('walk-type-step');
+    var slotStep = document.getElementById('slot-step');
+    var formContainer = document.getElementById('booking-form-container');
+
+    if (walkTypeStep) walkTypeStep.classList.remove('hidden');
+    if (slotStep) slotStep.classList.add('hidden');
+    if (formContainer) formContainer.classList.add('hidden');
+
+    var container = document.getElementById('walk-types-container');
+    if (!container) return;
+
+    container.innerHTML = '<p class="text-[#776958]">Загружаем типы прогулок...</p>';
 
     fetch('/api/instructors/' + inst.ID + '/walk-types')
         .then(function(res) { return res.json(); })
         .then(function(walkTypes) {
-            var container = document.getElementById('walk-types-container');
+            walkTypes = Array.isArray(walkTypes) ? walkTypes : [];
             container.innerHTML = '';
+
             if (walkTypes.length === 0) {
-                container.innerHTML = '<p class="text-gray-500">У инструктора пока нет типов прогулок</p>';
+                container.innerHTML = '<p class="text-[#776958]">У инструктора пока нет типов прогулок</p>';
                 return;
             }
+
             walkTypes.forEach(function(wt) {
                 var card = document.createElement('button');
                 card.type = 'button';
-                card.className = 'text-left border rounded-lg p-4 hover:border-blue-500';
-                card.innerHTML = '<p class="font-semibold">' + wt.Name + '</p>' +
-                    '<p class="text-sm text-blue-700">' + wt.Price + ' ₽</p>' +
-                    '<p class="text-sm text-gray-600">до ' + wt.MaxPeople + ' чел.</p>';
-                card.onclick = function() { selectWalkType(wt); };
+                card.className = 'text-left beige-card rounded-2xl p-5 hover:border-[#8a5a2f] transition duration-200';
+
+                card.innerHTML =
+                    '<p class="text-lg font-bold text-[#3f3326] mb-2">' + escapeHtml(wt.Name || 'Прогулка') + '</p>' +
+                    '<p class="text-xl font-extrabold text-[#8a5a2f] mb-1">' + formatPrice(wt.Price) + '</p>' +
+                    '<p class="text-sm text-[#776958]">до ' + escapeHtml(wt.MaxPeople) + ' чел.</p>';
+
+                card.onclick = function() {
+                    selectWalkType(wt);
+                    markSelectedButton(container, card);
+                };
+
                 container.appendChild(card);
             });
+
+            walkTypeStep.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        })
+        .catch(function(err) {
+            console.error('Ошибка загрузки типов прогулок:', err);
+            container.innerHTML = '<p class="text-red-700">Не удалось загрузить типы прогулок</p>';
         });
 }
 
 function selectWalkType(walkType) {
     bookingState.walkType = walkType;
     bookingState.slot = null;
-    document.getElementById('slot-step').classList.remove('hidden');
-    document.getElementById('booking-form-container').classList.add('hidden');
+
+    var slotStep = document.getElementById('slot-step');
+    var formContainer = document.getElementById('booking-form-container');
+
+    if (slotStep) slotStep.classList.remove('hidden');
+    if (formContainer) formContainer.classList.add('hidden');
+
+    var container = document.getElementById('slots-container');
+    if (!container) return;
+
+    container.innerHTML = '<p class="text-[#776958]">Загружаем свободное время...</p>';
 
     fetch('/api/slots?instructor_id=' + bookingState.instructor.ID + '&walk_type_id=' + walkType.ID)
         .then(function(res) { return res.json(); })
         .then(function(slots) {
             slots = Array.isArray(slots) ? slots : [];
-
-            var container = document.getElementById('slots-container');
             container.innerHTML = '';
 
-            if (slots.length === 0) {
-                container.innerHTML = '<p class="text-gray-500">Нет доступных слотов для выбранной прогулки</p>';
+            var availableSlots = slots.filter(function(slot) {
+                return slot.Status === 'available';
+            });
+
+            if (availableSlots.length === 0) {
+                container.innerHTML = '<p class="text-[#776958]">Нет доступных слотов для выбранной прогулки</p>';
                 return;
             }
 
             var grouped = {};
-            slots.forEach(function(slot) {
-                if (slot.Status !== 'available') return;
+            availableSlots.forEach(function(slot) {
                 var date = new Date(slot.Date).toLocaleDateString('ru-RU');
                 if (!grouped[date]) grouped[date] = [];
                 grouped[date].push(slot);
@@ -202,33 +245,47 @@ function selectWalkType(walkType) {
 
             Object.keys(grouped).sort().forEach(function(date) {
                 var dateDiv = document.createElement('div');
-                dateDiv.className = 'mb-4';
-                dateDiv.innerHTML = '<h3 class="text-lg font-semibold mb-2">' + date + '</h3>';
+                dateDiv.className = 'mb-5';
+
+                dateDiv.innerHTML =
+                    '<h3 class="text-lg font-bold text-[#3f3326] mb-3">' + escapeHtml(date) + '</h3>';
+
                 var grid = document.createElement('div');
                 grid.className = 'grid grid-cols-1 md:grid-cols-2 gap-3';
 
                 grouped[date].forEach(function(slot) {
+                    var startTime = slot.StartTime ? slot.StartTime.substring(0, 5) : '';
+                    var endTime = slot.EndTime ? slot.EndTime.substring(0, 5) : '';
+
                     var btn = document.createElement('button');
                     btn.type = 'button';
-                    btn.className = 'border rounded-lg p-4 text-left hover:border-blue-500';
-                    btn.innerHTML = '<p class="font-semibold">' + slot.StartTime.substring(0, 5) + ' - ' + slot.EndTime.substring(0, 5) + '</p>' +
-                        '<p class="text-sm text-gray-600">' + slot.Price + ' ₽ • до ' + slot.MaxPeople + ' чел.</p>';
+                    btn.className = 'text-left beige-card rounded-2xl p-5 hover:border-[#8a5a2f] transition duration-200';
+
+                    btn.innerHTML =
+                        '<p class="text-lg font-bold text-[#3f3326] mb-1">' + escapeHtml(startTime) + ' - ' + escapeHtml(endTime) + '</p>' +
+                        '<p class="text-sm text-[#776958]">' + formatPrice(slot.Price) + ' • до ' + escapeHtml(slot.MaxPeople) + ' чел.</p>';
+
                     btn.onclick = function() {
-                        console.log('Выбран слот:', slot);
                         selectSlot(slot, date);
+                        markSelectedButton(grid, btn);
                     };
+
                     grid.appendChild(btn);
                 });
 
                 dateDiv.appendChild(grid);
                 container.appendChild(dateDiv);
             });
+
+            slotStep.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        })
+        .catch(function(err) {
+            console.error('Ошибка загрузки слотов:', err);
+            container.innerHTML = '<p class="text-red-700">Не удалось загрузить доступные слоты</p>';
         });
 }
 
 function selectSlot(slot, dateLabel) {
-    console.log('Выбран слот:', slot);
-
     bookingState.slot = slot;
 
     var selectedSlotInput = document.getElementById('selected-slot-id');
@@ -236,23 +293,8 @@ function selectSlot(slot, dateLabel) {
     var formContainer = document.getElementById('booking-form-container');
     var weatherInfo = document.getElementById('weather-info');
 
-    if (!selectedSlotInput) {
-        console.error('Не найден элемент #selected-slot-id');
-        return;
-    }
-
-    if (!peopleCountInput) {
-        console.error('Не найден элемент #people-count');
-        return;
-    }
-
-    if (!formContainer) {
-        console.error('Не найден элемент #booking-form-container');
-        return;
-    }
-
-    if (!weatherInfo) {
-        console.error('Не найден элемент #weather-info');
+    if (!selectedSlotInput || !peopleCountInput || !formContainer || !weatherInfo) {
+        console.error('Не найдены элементы формы бронирования');
         return;
     }
 
@@ -263,15 +305,15 @@ function selectSlot(slot, dateLabel) {
     var endTime = slot.EndTime ? slot.EndTime.substring(0, 5) : '';
 
     weatherInfo.innerHTML =
-        '<div class="bg-blue-50 border border-blue-200 rounded-lg p-4">' +
-        '<h3 class="font-bold text-lg mb-3 text-blue-900">Вы выбрали прогулку</h3>' +
-        '<div class="space-y-1 text-gray-800">' +
-        '<p><strong>Инструктор:</strong> ' + bookingState.instructor.Name + '</p>' +
-        '<p><strong>Прогулка:</strong> ' + (slot.WalkTypeName || bookingState.walkType.Name) + '</p>' +
-        '<p><strong>Дата:</strong> ' + dateLabel + '</p>' +
-        '<p><strong>Время:</strong> ' + startTime + ' - ' + endTime + '</p>' +
-        '<p><strong>Цена:</strong> <span class="text-blue-700 font-bold">' + slot.Price + ' ₽</span></p>' +
-        '<p><strong>Количество мест:</strong> до ' + slot.MaxPeople + ' чел.</p>' +
+        '<div>' +
+        '<h3 class="font-bold text-xl mb-4 text-[#3f3326]">Вы выбрали прогулку</h3>' +
+        '<div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-[#3f3326]">' +
+        '<p><strong>Инструктор:</strong> ' + escapeHtml(bookingState.instructor.Name) + '</p>' +
+        '<p><strong>Прогулка:</strong> ' + escapeHtml(slot.WalkTypeName || bookingState.walkType.Name) + '</p>' +
+        '<p><strong>Дата:</strong> ' + escapeHtml(dateLabel) + '</p>' +
+        '<p><strong>Время:</strong> ' + escapeHtml(startTime) + ' - ' + escapeHtml(endTime) + '</p>' +
+        '<p><strong>Цена:</strong> <span class="text-[#8a5a2f] font-extrabold">' + formatPrice(slot.Price) + '</span></p>' +
+        '<p><strong>Количество мест:</strong> до ' + escapeHtml(slot.MaxPeople) + ' чел.</p>' +
         '</div>' +
         '</div>';
 
@@ -285,14 +327,18 @@ function selectSlot(slot, dateLabel) {
 
 function submitBookingForm(e) {
     e.preventDefault();
+
     var form = e.target;
     var formData = new FormData(form);
-    var slotId = parseInt(formData.get('slot_id'));
+    var slotId = parseInt(formData.get('slot_id'), 10);
+    var resultContainer = document.getElementById('booking-result');
 
     if (!bookingState.slot || !Number.isFinite(slotId) || slotId < 1) {
-        document.getElementById('booking-result').innerHTML = '<div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">' +
+        resultContainer.innerHTML =
+            '<div class="bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded-2xl">' +
             '<p class="font-semibold">Выберите время прогулки</p>' +
-            '<p class="text-sm">Сначала выберите инструктора, прогулку и доступный слот.</p></div>';
+            '<p class="text-sm">Сначала выберите инструктора, прогулку и доступный слот.</p>' +
+            '</div>';
         return;
     }
 
@@ -301,49 +347,54 @@ function submitBookingForm(e) {
         client_name: formData.get('client_name'),
         client_phone: formData.get('client_phone'),
         client_email: formData.get('client_email'),
-        people_count: parseInt(formData.get('people_count'))
+        people_count: parseInt(formData.get('people_count'), 10)
     };
 
     var btn = form.querySelector('button[type="submit"]');
     btn.disabled = true;
     btn.textContent = 'Отправка...';
+    btn.classList.add('opacity-70', 'cursor-not-allowed');
 
     fetch('/booking', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data)
     })
-    .then(function(res) {
-        if (!res.ok) {
-            if (res.status === 401) {
+        .then(function(res) {
+            if (!res.ok) {
                 return res.text().then(function(err) {
-                    throw new Error(err || 'Для бронирования заполните имя и телефон');
+                    throw new Error(err || 'Ошибка при бронировании');
                 });
             }
-            return res.text().then(function(err) { throw new Error(err || 'Ошибка при бронировании'); });
-        }
-        return res.json();
-    })
-    .then(function(result) {
-        document.getElementById('booking-result').innerHTML = '<div class="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded">' +
-            '<p class="font-semibold">Отлично! Вы успешно забронировали прогулку 🎉</p>' +
-            '<p class="text-sm"><strong>Номер бронирования:</strong> #' + result.ID + '</p>' +
-            '<p class="text-sm"><strong>Маршрут:</strong> ' + bookingState.walkType.Name + '</p>' +
-            // '<p class="text-sm">Статус и детали доступны в вашем <a href="/lk" class="underline font-semibold">личном кабинете</a>.</p>' +
-            '<p class="text-sm">Администратор свяжется с вами для уточнения деталей</a>.</p>' +
-            '<p class="text-sm mt-2"><strong>Статус:</strong> Ожидает подтверждения администратором в течение ' + result.hold_minutes + ' минут.</p>' +
-            '</div>';
-        form.reset();
-        selectWalkType(bookingState.walkType);
-    })
-    .catch(function(err) {
-        if (err && err.message === 'redirecting') return;
-        document.getElementById('booking-result').innerHTML = '<div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">' +
-            '<p class="font-semibold">Ошибка при создании бронирования</p>' +
-            '<p class="text-sm">' + (err.message || 'Пожалуйста, попробуйте еще раз') + '</p></div>';
-    })
-    .finally(function() {
-        btn.disabled = false;
-        btn.textContent = 'Забронировать';
-    });
+
+            return res.json();
+        })
+        .then(function(result) {
+            resultContainer.innerHTML =
+                '<div class="bg-[#f0f7e8] border border-green-200 text-green-900 px-5 py-4 rounded-2xl">' +
+                '<p class="font-bold text-lg">Отлично! Заявка на прогулку создана</p>' +
+                '<p class="text-sm mt-1"><strong>Номер бронирования:</strong> #' + escapeHtml(result.ID) + '</p>' +
+                '<p class="text-sm"><strong>Маршрут:</strong> ' + escapeHtml(bookingState.walkType.Name) + '</p>' +
+                '<p class="text-sm mt-2">Администратор свяжется с вами для уточнения деталей.</p>' +
+                '<p class="text-sm mt-2"><strong>Статус:</strong> ожидает подтверждения администратором в течение ' + escapeHtml(result.hold_minutes || 20) + ' минут.</p>' +
+                '</div>';
+
+            form.reset();
+
+            if (bookingState.walkType) {
+                selectWalkType(bookingState.walkType);
+            }
+        })
+        .catch(function(err) {
+            resultContainer.innerHTML =
+                '<div class="bg-red-50 border border-red-200 text-red-800 px-5 py-4 rounded-2xl">' +
+                '<p class="font-bold">Ошибка при создании бронирования</p>' +
+                '<p class="text-sm mt-1">' + escapeHtml(err.message || 'Пожалуйста, попробуйте еще раз') + '</p>' +
+                '</div>';
+        })
+        .finally(function() {
+            btn.disabled = false;
+            btn.textContent = 'Забронировать';
+            btn.classList.remove('opacity-70', 'cursor-not-allowed');
+        });
 }

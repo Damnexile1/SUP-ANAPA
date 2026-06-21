@@ -5,29 +5,168 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{template "title" .}}</title>
+
     <script src="https://unpkg.com/htmx.org@1.9.10"></script>
     <script src="https://cdn.tailwindcss.com"></script>
+
+    <style>
+        :root {
+            --sand-50: #fffaf2;
+            --sand-100: #f8eddc;
+            --sand-200: #ead7bd;
+            --sand-300: #d7b98f;
+            --sand-400: #bd925f;
+            --sand-500: #9b6a3a;
+            --sand-600: #7a4d24;
+            --sand-700: #5c3718;
+            --sand-800: #3f2612;
+
+            --text-main: #3f3326;
+            --text-muted: #776958;
+            --card-bg: rgba(255, 250, 242, 0.88);
+            --card-border: rgba(122, 77, 36, 0.16);
+        }
+
+        html {
+            min-height: 100%;
+        }
+
+        body {
+            min-height: 100vh;
+            color: var(--text-main);
+            background:
+                    radial-gradient(circle at 12% 8%, rgba(255, 255, 255, 0.88) 0, rgba(255, 255, 255, 0) 30%),
+                    radial-gradient(circle at 82% 16%, rgba(189, 146, 95, 0.30) 0, rgba(189, 146, 95, 0) 34%),
+                    radial-gradient(circle at 50% 100%, rgba(122, 77, 36, 0.16) 0, rgba(122, 77, 36, 0) 42%),
+                    linear-gradient(135deg, #fff8ec 0%, #f2dfc2 44%, #dfc09a 100%);
+            background-attachment: fixed;
+        }
+
+        body::before {
+            content: "";
+            position: fixed;
+            inset: 0;
+            z-index: -2;
+            pointer-events: none;
+            background-image:
+                    linear-gradient(rgba(255, 250, 242, 0.72), rgba(255, 250, 242, 0.72)),
+                    url("/static/images/sup1.jpg");
+            background-size: cover;
+            background-position: center;
+            filter: blur(20px);
+            transform: scale(1.08);
+            opacity: 0.24;
+        }
+
+        body::after {
+            content: "";
+            position: fixed;
+            inset: 0;
+            z-index: -1;
+            pointer-events: none;
+            background-image:
+                    linear-gradient(rgba(122, 77, 36, 0.035) 1px, transparent 1px),
+                    linear-gradient(90deg, rgba(122, 77, 36, 0.035) 1px, transparent 1px);
+            background-size: 42px 42px;
+            mask-image: linear-gradient(to bottom, rgba(0,0,0,0.40), rgba(0,0,0,0));
+        }
+
+        .site-shell {
+            position: relative;
+            min-height: 100vh;
+        }
+
+        .nav-link {
+            color: #5c3718;
+            transition: color 0.2s ease, opacity 0.2s ease;
+        }
+
+        .nav-link:hover {
+            color: #9b6a3a;
+        }
+
+        .glass-card {
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            box-shadow: 0 18px 45px rgba(63, 38, 18, 0.10);
+            backdrop-filter: blur(12px);
+        }
+
+        .beige-card {
+            background: #fffaf2;
+            border: 1px solid rgba(122, 77, 36, 0.14);
+            box-shadow: 0 14px 34px rgba(63, 38, 18, 0.10);
+        }
+
+        .beige-button {
+            background: #8a5a2f;
+            color: #fffaf2;
+            box-shadow: 0 14px 26px rgba(138, 90, 47, 0.26);
+            transition: background-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .beige-button:hover {
+            background: #744822;
+            transform: translateY(-1px);
+            box-shadow: 0 16px 30px rgba(138, 90, 47, 0.32);
+        }
+
+        .beige-outline-button {
+            border: 1px solid #8a5a2f;
+            color: #744822;
+            background: rgba(255, 250, 242, 0.70);
+            transition: background-color 0.2s ease, transform 0.2s ease;
+        }
+
+        .beige-outline-button:hover {
+            background: #fff3df;
+            transform: translateY(-1px);
+        }
+
+        .input-beige {
+            background: rgba(255, 250, 242, 0.94);
+            border: 1px solid rgba(122, 77, 36, 0.20);
+            color: #3f3326;
+            outline: none;
+            transition: border-color 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .input-beige:focus {
+            border-color: #bd925f;
+            box-shadow: 0 0 0 3px rgba(189, 146, 95, 0.24);
+        }
+
+        .text-brand {
+            color: #8a5a2f;
+        }
+
+        .text-brand-dark {
+            color: #5c3718;
+        }
+
+        .bg-soft-beige {
+            background: rgba(255, 250, 242, 0.78);
+        }
+    </style>
 </head>
-<body class="bg-gray-50">
-    <nav class="bg-blue-600 text-white p-4">
-        <div class="container mx-auto flex justify-between items-center">
-            <a href="/" class="text-2xl font-bold">SUP Anapa</a>
-            <div class="space-x-4">
-                <a href="/" class="hover:underline">Главная</a>
-                <a href="/instructors" class="hover:underline">Инструкторы</a>
-                <a href="/booking" class="hover:underline">Бронирование</a>
-                {{if .UserUsername}}
-                <a href="/lk" class="hover:underline font-semibold">Личный кабинет</a>
-                <span class="text-blue-200">{{.UserUsername}}</span>
-                <a href="/user/logout" class="hover:underline">Выход</a>
-                {{else}}
-                <a href="/user/login" class="hover:underline">Вход</a>
-                <a href="/user/register" class="hover:underline">Регистрация</a>
-                {{end}}
+
+<body>
+<div class="site-shell">
+    <nav class="sticky top-0 z-50 border-b border-amber-950/10 bg-[#f2dfc2]/90 backdrop-blur-md">
+        <div class="container mx-auto flex justify-between items-center px-4 py-4">
+            <a href="/" class="text-2xl font-extrabold tracking-tight text-[#5c3718]">
+                SUP Anapa
+            </a>
+
+            <div class="flex items-center gap-5 text-sm md:text-base font-semibold">
+                <a href="/" class="nav-link">Главная</a>
+                <a href="/instructors" class="nav-link">Инструкторы</a>
+                <a href="/booking" class="nav-link">Бронирование</a>
+
                 {{if .Username}}
-                <a href="/admin" class="hover:underline font-semibold">Админка</a>
-                <span class="text-blue-200">{{.Username}}</span>
-                <a href="/admin/logout" class="hover:underline">Выход</a>
+                <a href="/admin" class="nav-link">Админка</a>
+                <span class="text-[#9b6a3a]">{{.Username}}</span>
+                <a href="/admin/logout" class="nav-link">Выход</a>
                 {{end}}
             </div>
         </div>
@@ -37,11 +176,12 @@
         {{template "content" .}}
     </main>
 
-    <footer class="bg-gray-800 text-white p-6 mt-12">
-        <div class="container mx-auto text-center">
+    <footer class="mt-16 border-t border-amber-950/10 bg-[#5c3718] text-[#fffaf2]">
+        <div class="container mx-auto text-center p-6">
             <p>&copy; 2026 SUP Anapa. Все права защищены.</p>
         </div>
     </footer>
+</div>
 </body>
 </html>
 {{end}}

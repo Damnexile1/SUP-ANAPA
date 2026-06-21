@@ -2,12 +2,29 @@
 
 {{define "content"}}
 <div class="max-w-6xl mx-auto">
-    <h1 class="text-4xl font-bold text-gray-800 mb-4 text-center">Наши инструкторы</h1>
-    <p class="text-xl text-gray-600 mb-12 text-center">Профессиональная команда с многолетним опытом</p>
+    <div class="text-center mb-12">
+        <div class="inline-flex items-center gap-2 bg-[#fff3df]/90 text-[#8a5a2f] border border-amber-900/10 px-4 py-2 rounded-full text-sm font-semibold mb-5 shadow-sm">
+            <span>👨‍🏫</span>
+            <span>Команда SUP Anapa</span>
+        </div>
 
-    <div id="instructors-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-        <!-- Инструкторы будут загружены здесь -->
+        <h1 class="text-4xl md:text-5xl font-extrabold text-[#3f3326] mb-4">
+            Наши инструкторы
+        </h1>
+
+        <p class="text-xl text-[#776958] max-w-3xl mx-auto">
+            Профессиональная команда с опытом SUP-прогулок, сопровождения маршрутов и обучения новичков.
+        </p>
+    </div>
+
+    <div class="glass-card rounded-3xl p-6 md:p-8">
+        <div id="instructors-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+            <div class="text-center text-[#776958] col-span-full">
+                Загружаем инструкторов...
+            </div>
+        </div>
     </div>
 </div>
+
 <script src="/static/js/app.js"></script>
 {{end}}
