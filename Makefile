@@ -253,7 +253,13 @@ admin-create: ## Создать или обновить админа: make admin
 		exit 1; \
 	fi
 	@echo "$(GREEN)Создание/обновление администратора $(USERNAME)...$(NC)"
-	@$(DOCKER_COMPOSE) run --rm admin-cli go run ./cmd/admin -username "$(USERNAME)" -password "$(PASSWORD)"
+	@docker run --rm \
+		--network sup-anapa_sup-anapa-network \
+		-v "$$(pwd)":/app \
+		-w /app \
+		-e DATABASE_URL="postgres://postgres:postgres@sup-anapa-db:5432/sup_anapa?sslmode=disable" \
+		golang:alpine \
+		sh -c 'go run ./cmd/admin -username "$(USERNAME)" -password "$(PASSWORD)"'
 	@echo "$(GREEN)Готово!$(NC)"
 
 .DEFAULT_GOAL := help
