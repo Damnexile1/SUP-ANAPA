@@ -1,4 +1,4 @@
-.PHONY: help build run dev test clean docker-up docker-up-build docker-down migrate-up migrate-down migrate-create deploy-local deploy-prod logs-file
+.PHONY: help build run dev test clean docker-up docker-up-build docker-down migrate-up migrate-down migrate-create deploy-local deploy-prod logs-file admin-create
 
 # Переменные
 APP_NAME=sup-anapa
@@ -224,13 +224,6 @@ status: ## Показать статус сервисов
 	@echo "$(GREEN)Статус миграций:$(NC)"
 	@$(MAKE) migrate-status || true
 
-# Утилиты
-create-admin: ## Создать администратора (TODO: нужно реализовать CLI)
-	@echo "$(YELLOW)TODO: Реализовать создание администратора$(NC)"
-	@echo "$(YELLOW)Пока можно добавить через SQL:$(NC)"
-	@echo "  make db-shell"
-	@echo "  INSERT INTO admins (username, password_hash) VALUES ('admin', 'hash');"
-
 backup-db: ## Создать бэкап базы данных
 	@echo "$(GREEN)Создание бэкапа БД...$(NC)"
 	@mkdir -p backups
@@ -249,5 +242,18 @@ restore-db: ## Восстановить БД из бэкапа (использо
 shell: ## Открыть shell в контейнере приложения
 	@echo "$(GREEN)Открытие shell в контейнере приложения...$(NC)"
 	@$(DOCKER_EXEC) sh
+
+admin-create: ## Создать или обновить админа: make admin-create USERNAME=admin PASSWORD='password'
+	@if [ -z "$(USERNAME)" ]; then \
+		echo "$(RED)Ошибка: укажите USERNAME=admin$(NC)"; \
+		exit 1; \
+	fi
+	@if [ -z "$(PASSWORD)" ]; then \
+		echo "$(RED)Ошибка: укажите PASSWORD='password'$(NC)"; \
+		exit 1; \
+	fi
+	@echo "$(GREEN)Создание/обновление администратора $(USERNAME)...$(NC)"
+	@$(DOCKER_COMPOSE) run --rm admin-cli go run ./cmd/admin -username "$(USERNAME)" -password "$(PASSWORD)"
+	@echo "$(GREEN)Готово!$(NC)"
 
 .DEFAULT_GOAL := help

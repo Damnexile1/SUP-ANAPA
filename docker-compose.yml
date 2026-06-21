@@ -40,6 +40,22 @@ services:
       - ./logs:/app/logs
     restart: unless-stopped
 
+  admin-cli:
+    image: golang:1.25-alpine
+    container_name: sup-anapa-admin-cli
+    working_dir: /app
+    volumes:
+      - .:/app
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - sup-anapa-network
+    profiles:
+      - tools
+
 networks:
   sup-anapa-network:
     driver: bridge
